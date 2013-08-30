@@ -66,6 +66,7 @@
         src="http://ajax.googleapis.com/ajax/libs/dojo/1.3/dojo/dojo.xd.js"
         djConfig="parseOnLoad: true">
     </script>
+	<script type="text/javascript" src="https://code.jquery.com/jquery-latest.min.js"></script>
 
     <script type="text/javascript" charset="utf-8">
       dojo.require("dijit.ProgressBar");
@@ -79,7 +80,7 @@
       var totalHoursLeft;
       var totalHoursInSprint;
       var counter = 0;
-      
+      var g_iterationId = 0; 
       
       /**
        * Fetches user capacities from the server until all capacities have been fetched.
@@ -107,7 +108,8 @@
           });
           
           // Hide the progress bar, add the table rows.
-          dojo.destroy("djProgress");
+          dojo.style('djProgress', 'display', 'none'); 
+          //dojo.destroy("djProgress");
           for (var i = 0; i < userItems.length; i++) {
             var item = userItems[i];
             var statusRow = dojo.create("tr", null, "rows");
@@ -128,19 +130,23 @@
         if (username != null) {
           var queryUrl = TASKS_URL.replace("@@@username@@@", username).
               replace("@@@iterationId@@@", iterationId);
-          
+          console.log(queryUrl); 
           dojo.xhrGet({
             url: queryUrl,
             handleAs: "json",
             load: function(response, ioArgs) {
               var results = response.QueryResult.Results;              
-              var tasksLeft = results.length;
               var todoLeft = 0;
+		      var tasksLeft = 0;
 		      var totalHours = 0; 
               for (var i = 0; i < results.length; i++) {
                 var task = results[i];
                 totalHours += task.Estimate; 
-                todoLeft += task.ToDo;
+                if (task.State != 'Completed')
+	            {
+					tasksLeft++;
+	                todoLeft += task.ToDo;
+                }
               }
               
               jsProgress.update({progress: ++counter});
@@ -162,9 +168,42 @@
         }
       }
 
-      function fetchDoc() {
+	  function initDropDown()
+	  {
+		  var myOptions = {'13197744548': 'Aug, 2013', '13561745967': 'Sept, 2013'};
+          var first = true; 
+ 		  $.each(myOptions, function(val, text) {
+             if (first) 
+			 {
+				$('#mySelect').append(new Option(text,val,true));
+			    first = false; 
+			 }
+			 else 
+			 {
+			 	$('#mySelect').append(new Option(text,val));
+		     }
+		  });
+		  $('#mySelect').change(refreshData);
+      } 
+
+	  function refreshData()
+	  {
+		 dojo.style('djProgress', 'display', 'block'); 
+		 fetchDoc();
+	  }
+
+      function onLoad() {
+        initDropDown();
+		fetchDoc(); 
+      }
+
+	  function fetchDoc()
+	  {
+        $('#rows').empty();
+		userItems = []; 
+		g_iterationId  = $('#mySelect').val();
         dojo.xhrGet({
-          url: "https://rally1.rallydev.com/slm/webservice/1.15/iteration.js:current",
+          url: "https://rally1.rallydev.com/slm/webservice/1.15/iteration/" + g_iterationId + ".js",
           handleAs: "json",
           timeout: 5000,
           load: function(response, ioArgs) {
@@ -291,14 +330,21 @@
         return result;
       };      
     </script>
+
     <script type="text/javascript" charset="utf-8">
-      dojo.addOnLoad(fetchDoc);
+      dojo.addOnLoad(onLoad);
     </script>
     <title>
       Hours Left Widget for Rally
     </title>
   </head>
   <body class="soria">
+	<div>
+		Iteration:
+		<select id='mySelect'>
+		</select>
+	</div>
+	<div style='min-height:10px'></div>
     <table>
       <thead>
         <tr >
