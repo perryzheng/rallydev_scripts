@@ -72,7 +72,7 @@
       dojo.require("dijit.ProgressBar");
       dojo.require("dojo.parser");
       
-      const HOURS_PER_DAY = 5;      
+      const HOURS_PER_DAY = 7;      
       
       const ITERATION_URL = "https://rally1.rallydev.com/slm/webservice/1.15/iteration/@@@iterationId@@@.js";
 
@@ -80,7 +80,7 @@
       var totalHoursLeft;
       var totalHoursInSprint;
       var counter = 0;
-      var g_iterationId = 0; 
+      var g_iterationUrl = 0; 
       
       /**
        * Fetches user capacities from the server until all capacities have been fetched.
@@ -118,6 +118,7 @@
             dojo.create("td", {className: "name", innerHTML: item.name}, statusRow);
             dojo.create("td", {className: "name", innerHTML: item.totalHours}, statusRow);
             dojo.create("td", {className: "tasks", innerHTML: item.tasks}, statusRow);
+			dojo.create("td", {className: "hours", innerHTML: totalHoursLeft}, statusRow); 
             dojo.create("td", {className: "hours", innerHTML: item.hoursLeft}, statusRow);
             dojo.create("td", {className: statusClass, innerHTML: item.todo}, statusRow);
           }
@@ -130,7 +131,6 @@
         if (username != null) {
           var queryUrl = TASKS_URL.replace("@@@username@@@", username).
               replace("@@@iterationId@@@", iterationId);
-          console.log(queryUrl); 
           dojo.xhrGet({
             url: queryUrl,
             handleAs: "json",
@@ -168,11 +168,37 @@
         }
       }
 
-	  function initDropDown()
+	  function doWork()
 	  {
-		  var myOptions = {'13197744548': 'Aug, 2013', '13561745967': 'Sept, 2013'};
+		var myOptions = {};
+		dojo.xhrGet({
+          url: "https://rally1.rallydev.com/slm/webservice/1.15/iteration.js",
+          handleAs: "json",
+          timeout: 5000,
+          load: function(response, ioArgs) {
+			var results = response.QueryResult.Results;
+			for (var i = 0; i < results.length; i++)
+			{
+				var result = results[i];
+			    var url = result["_ref"];
+				var dateName = result["_refObjectName"]; 
+				myOptions[url] = dateName; 
+			}
+			initDropDown(myOptions); 
+			fetchDoc(); 
+          },
+          error: function(response, ioArgs) {
+            console.debug("error loading iteration json> " + response);
+          }
+        });
+      }
+
+	  function initDropDown(myOptions)
+	  {
+		  console.log("hi there: " + myOptions); 
           var first = true; 
  		  $.each(myOptions, function(val, text) {
+			 console.log("val: " + val + "; text: " + text); 
              if (first) 
 			 {
 				$('#mySelect').append(new Option(text,val,true));
@@ -193,17 +219,17 @@
 	  }
 
       function onLoad() {
-        initDropDown();
-		fetchDoc(); 
+        doWork();
       }
 
 	  function fetchDoc()
 	  {
         $('#rows').empty();
 		userItems = []; 
-		g_iterationId  = $('#mySelect').val();
+		g_iterationUrl  = $('#mySelect').val();
+		console.log("g_iterationUrl:" + g_iterationUrl);
         dojo.xhrGet({
-          url: "https://rally1.rallydev.com/slm/webservice/1.15/iteration/" + g_iterationId + ".js",
+          url: g_iterationUrl,
           handleAs: "json",
           timeout: 5000,
           load: function(response, ioArgs) {
@@ -215,11 +241,14 @@
             startDate = Date.parseRallyDate(startDate);
             
             var daysInSprint = startDate.getWeekdaysUntil(endDate);
+			$("#totalDaysInSprint").html(daysInSprint); 
             totalHoursInSprint = Date.daysToHours(daysInSprint);
-
+			$("#totalHoursInSprint").html(totalHoursInSprint); 
             var daysLeft = (today < startDate ? startDate : today).getWeekdaysUntil(endDate);
+			$("#hoursPerDay").html(HOURS_PER_DAY); 
+			$("#daysLeftInSprint").html(daysLeft); 
             totalHoursLeft = Date.daysToHours(daysLeft);
-
+			$(".hoursLeftInSprint").html(totalHoursLeft); 
             var iterationId = response.Iteration.ObjectID;
 
             // Fill an array with the list of users assigned to this team.
@@ -343,6 +372,10 @@
 		Iteration:
 		<select id='mySelect'>
 		</select>
+		<span>
+		For each person, there are <span id='totalDaysInSprint'></span> total days in this Sprint, which is <span id='totalHoursInSprint'></span> total hours estimated at <span id='hoursPerDay'></span> hours per day. There are <span id='daysLeftInSprint'></span> days left in this Sprint, which translates to <span class='hoursLeftInSprint'></span> hours left in the Sprint ("Hours Left in Sprint") for each person. Each individual's "Status" is then calculated by ("Hours Left in Sprint"(<span class='hoursLeftInSprint'></span>) - 
+"Task Hours Left"). 
+		</span>
 	</div>
 	<div style='min-height:10px'></div>
     <table>
@@ -351,7 +384,8 @@
           <th class="name">Name</th>
           <th class="hours">Estimated Hr</ht>
           <th class="tasks">Tasks Left</th>
-          <th class="hours">Hours Left</th>
+		  <th class="hours">Hours Left in Sprint</th>
+          <th class="hours">Task Hours Left</th>
           <th class="hours">Status</th>
         </tr>
       </thead>
